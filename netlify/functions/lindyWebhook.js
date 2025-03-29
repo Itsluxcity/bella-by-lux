@@ -20,7 +20,10 @@ exports.handler = async function(event, context) {
     return {
       statusCode: 405,
       headers,
-      body: JSON.stringify({ error: 'Method not allowed' })
+      body: JSON.stringify({
+        success: false,
+        error: 'Method not allowed'
+      })
     };
   }
 
@@ -88,4 +91,10 @@ exports.handler = async function(event, context) {
       })
     };
   }
+};
+
+// Function configuration
+exports.config = {
+  path: "/.netlify/functions/lindyWebhook",
+  method: ["POST", "OPTIONS"]
 }; 
