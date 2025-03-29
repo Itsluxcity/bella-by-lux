@@ -40,8 +40,15 @@ exports.handler = async function(event, context) {
       data = JSON.parse(event.body);
       console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
     } catch (parseError) {
-      console.log('Not JSON, using raw text');
-      data = { text: event.body };
+      console.error('Error parsing webhook data:', parseError);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          error: 'Invalid JSON payload'
+        })
+      };
     }
 
     // If this is a polling request (has messageId)
@@ -59,6 +66,7 @@ exports.handler = async function(event, context) {
           })
         };
       }
+      // If no stored response yet, return 202 to indicate we're still waiting
       return {
         statusCode: 202,
         headers,
@@ -69,10 +77,10 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // This is a webhook callback from Lindy
+    // This must be a webhook callback from Lindy
     let responseText = '';
     
-    // Extract response text from various possible locations
+    // Extract response text from Lindy's webhook data
     if (data.response && typeof data.response === 'string') {
       responseText = data.response;
     } else if (data.response && data.response.text) {
@@ -86,29 +94,30 @@ exports.handler = async function(event, context) {
     }
 
     if (!responseText) {
-      console.error('No response text found:', event.body);
+      console.error('No response text found in Lindy webhook:', event.body);
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: false,
-          error: 'No response text found'
+          error: 'No response text found in webhook'
         })
       };
     }
 
-    // Store the response if we have a messageId
+    // Store the response with the messageId from the original request
     if (data.messageId) {
+      console.log('Storing response for messageId:', data.messageId);
       responseStore.set(data.messageId, responseText);
     }
 
-    // Send back the response
+    // Acknowledge receipt of webhook
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        text: responseText
+        message: 'Webhook received and processed'
       })
     };
   } catch (error) {
