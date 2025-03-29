@@ -198,10 +198,19 @@
                     return;
                 }
 
-                console.log('Sending to Bella:', cleanText, 'Using URL:', currentUrl);
+                console.log('Sending to Bella:', cleanText);
                 
                 // Show temporary "thinking" message
                 displayLindyResponse("Thinking...");
+
+                // Construct the request payload
+                const payload = {
+                    text: cleanText,
+                    source: 'bella-website',
+                    callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
+                };
+
+                console.log('Request payload:', JSON.stringify(payload, null, 2));
                 
                 const response = await fetch(currentUrl, {
                     method: 'POST',
@@ -209,20 +218,15 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${secretKey}`
                     },
-                    body: JSON.stringify({
-                        text: cleanText,
-                        source: 'bella-website',
-                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
-                    })
+                    body: JSON.stringify(payload)
                 });
-                
+
                 if (!response.ok) {
                     console.error('Failed to send to Bella:', response.statusText);
                     const errorText = await response.text();
                     console.error('Error details:', errorText);
                     displayLindyResponse("I'm having trouble connecting. Please try again in a moment.");
                 } else {
-                    // Don't display any message here - wait for the webhook callback
                     const data = await response.json();
                     console.log('Initial Bella response:', JSON.stringify(data, null, 2));
                     

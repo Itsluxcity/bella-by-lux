@@ -28,11 +28,14 @@ exports.handler = async function(event, context) {
   }
 
   try {
+    // Log the raw body for debugging
+    console.log('Raw webhook body:', event.body);
+
     // Parse the incoming webhook data
     let data;
     try {
       data = JSON.parse(event.body);
-      console.log('Received webhook data:', JSON.stringify(data, null, 2));
+      console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
     } catch (parseError) {
       console.error('Error parsing webhook data:', parseError);
       return {
@@ -40,7 +43,8 @@ exports.handler = async function(event, context) {
         headers,
         body: JSON.stringify({ 
           success: false,
-          error: 'Invalid JSON payload'
+          error: 'Invalid JSON payload',
+          details: parseError.message
         })
       };
     }
@@ -49,7 +53,9 @@ exports.handler = async function(event, context) {
     let responseText = '';
     
     // Check for response in various possible locations
-    if (data.response && data.response.text) {
+    if (data.response && typeof data.response === 'string') {
+      responseText = data.response;
+    } else if (data.response && data.response.text) {
       responseText = data.response.text;
     } else if (data.response && data.response.message) {
       responseText = data.response.message;
@@ -60,7 +66,7 @@ exports.handler = async function(event, context) {
     }
 
     if (!responseText) {
-      console.error('No response text found in webhook data');
+      console.error('No response text found in webhook data:', data);
       return {
         statusCode: 200,
         headers,
