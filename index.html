@@ -161,20 +161,37 @@
         const SMOOTHING_FACTOR = 0.95;
         const NOISE_THRESHOLD = 0.15;
 
-        // Add function to display Lindy's response
         function displayLindyResponse(text) {
-            console.log('Displaying Bella response:', text);
-            const responseDiv = document.getElementById('response');
-            responseDiv.textContent = "Bella: " + text;
-            responseDiv.classList.add('active');
-            
-            // Keep the response visible for 8 seconds
-            setTimeout(() => {
-                responseDiv.classList.remove('active');
-            }, 8000);
+            console.log('Displaying response:', text);
+            const responseElement = document.getElementById('response');
+            if (responseElement) {
+                responseElement.textContent = 'Bella: ' + text;
+                responseElement.style.opacity = '1';
+                
+                // Fade out after 8 seconds
+                setTimeout(() => {
+                    responseElement.style.opacity = '0';
+                }, 8000);
+            }
         }
 
-        // Add function to send data to Lindy webhook
+        async function handleWebhookResponse(response) {
+            try {
+                const data = await response.json();
+                console.log('Webhook response:', data);
+                
+                if (data.success && data.text) {
+                    displayLindyResponse(data.text);
+                } else {
+                    console.error('Invalid webhook response:', data);
+                    displayLindyResponse("I'm having trouble understanding. Could you try again?");
+                }
+            } catch (error) {
+                console.error('Error handling webhook response:', error);
+                displayLindyResponse("I'm having trouble understanding. Could you try again?");
+            }
+        }
+
         async function sendToLindy(text) {
             const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/87662baa-61d6-4365-b736-f054f92bcc8d';
             const secretKey = '5ab99a9411fab3fbedf07ae1217d5541b729803b147360fc1151b203f1994b3c';
@@ -190,7 +207,6 @@
                 const cleanText = text.trim()
                     .replace(/[\r\n]+/g, ' ')
                     .replace(/[^\x20-\x7E]/g, '') // Remove non-printable characters
-                    .replace(/"/g, '\\"')          // Escape quotes
                     .trim();
 
                 if (!cleanText) {
@@ -203,22 +219,18 @@
                 // Show temporary "thinking" message
                 displayLindyResponse("Thinking...");
 
-                // Construct the request payload
-                const payload = {
-                    text: cleanText,
-                    source: 'bella-website',
-                    callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
-                };
-
-                console.log('Request payload:', JSON.stringify(payload, null, 2));
-                
+                // Send to Lindy
                 const response = await fetch(currentUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${secretKey}`
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        text: cleanText,
+                        source: 'bella-website',
+                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
+                    })
                 });
 
                 if (!response.ok) {
@@ -226,15 +238,16 @@
                     const errorText = await response.text();
                     console.error('Error details:', errorText);
                     displayLindyResponse("I'm having trouble connecting. Please try again in a moment.");
-                } else {
-                    const data = await response.json();
-                    console.log('Initial Bella response:', JSON.stringify(data, null, 2));
-                    
-                    // Store the conversation ID if we get one
-                    if (data && data.data && data.data.conversationId && !conversationId) {
-                        localStorage.setItem('lindyConversationId', data.data.conversationId);
-                        console.log('Stored conversation ID:', data.data.conversationId);
-                    }
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('Initial Bella response:', data);
+                
+                // Store the conversation ID if we get one
+                if (data && data.data && data.data.conversationId && !conversationId) {
+                    localStorage.setItem('lindyConversationId', data.data.conversationId);
+                    console.log('Stored conversation ID:', data.data.conversationId);
                 }
             } catch (error) {
                 console.error('Error sending to Bella:', error);

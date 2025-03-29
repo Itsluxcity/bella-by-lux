@@ -31,48 +31,40 @@ exports.handler = async function(event, context) {
     // Log the raw body for debugging
     console.log('Raw webhook body:', event.body);
 
-    // Parse the incoming webhook data
+    // Try to parse as JSON first, if that fails treat as raw text
     let data;
+    let responseText = '';
+    
     try {
       data = JSON.parse(event.body);
       console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
+      
+      // Extract response text from JSON structure
+      if (data.response && typeof data.response === 'string') {
+        responseText = data.response;
+      } else if (data.response && data.response.text) {
+        responseText = data.response.text;
+      } else if (data.response && data.response.message) {
+        responseText = data.response.message;
+      } else if (data.text) {
+        responseText = data.text;
+      } else if (data.message) {
+        responseText = data.message;
+      }
     } catch (parseError) {
-      console.error('Error parsing webhook data:', parseError);
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          success: false,
-          error: 'Invalid JSON payload',
-          details: parseError.message
-        })
-      };
-    }
-
-    // Extract the response text from the webhook data
-    let responseText = '';
-    
-    // Check for response in various possible locations
-    if (data.response && typeof data.response === 'string') {
-      responseText = data.response;
-    } else if (data.response && data.response.text) {
-      responseText = data.response.text;
-    } else if (data.response && data.response.message) {
-      responseText = data.response.message;
-    } else if (data.text) {
-      responseText = data.text;
-    } else if (data.message) {
-      responseText = data.message;
+      // If JSON parsing fails, use the raw body as the response text
+      console.log('Not JSON, using raw text');
+      responseText = event.body;
     }
 
     if (!responseText) {
-      console.error('No response text found in webhook data:', data);
+      console.error('No response text found:', event.body);
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: false,
-          error: 'No response text found in webhook data'
+          error: 'No response text found'
         })
       };
     }
