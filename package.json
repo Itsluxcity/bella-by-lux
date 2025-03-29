@@ -1,0 +1,16 @@
+{
+  "name": "bella-by-lux",
+  "version": "1.0.0",
+  "description": "Audio visualizer with Lindy.ai integration",
+  "main": "index.html",
+  "scripts": {
+    "start": "netlify dev",
+    "build": "# No build step needed"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.0.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+} 

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bella by Lux</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: black;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            text-align: center;
+            z-index: 2;
+        }
+        #title {
+            color: white;
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 4px;
+            margin: 0;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        #container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #circle {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgb(255, 255, 255) 0%, rgb(200, 225, 255) 50%, rgb(140, 180, 255) 100%);
+            box-shadow: 0 0 30px rgba(140, 180, 255, 0.3);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            will-change: transform, filter;
+            filter: blur(0px);
+        }
+        #circle.active {
+            filter: url('#cloud-filter');
+        }
+        #transcription {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.8);
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 1px;
+            text-align: center;
+            max-width: 600px;
+            min-height: 24px;
+            opacity: 0;
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 10px;
+        }
+        #transcription.active {
+            opacity: 1;
+        }
+        #status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        svg {
+            position: absolute;
+            width: 0;
+            height: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1 id="title">BELLA BY LUX</h1>
+    </div>
+
+    <div id="container">
+        <div id="circle"></div>
+    </div>
+
+    <div id="transcription"></div>
+    <div id="status"></div>
+
+    <svg>
+        <defs>
+            <filter id="cloud-filter">
+                <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="4" seed="1" stitchTiles="stitch">
+                    <animate attributeName="seed" from="1" to="2" dur="3s" repeatCount="indefinite" />
+                </feTurbulence>
+                <feDisplacementMap in="SourceGraphic" scale="20" />
+                <feGaussianBlur stdDeviation="2" />
+                <feComposite operator="in" in2="SourceGraphic" />
+            </filter>
+        </defs>
+    </svg>
+
+    <script>
+        const circle = document.getElementById('circle');
+        const status = document.getElementById('status');
+        const transcription = document.getElementById('transcription');
+        let audioContext;
+        let analyser;
+        let microphone;
+        let isActive = false;
+        let inactivityTimeout;
+        let animationFrame;
+        let recognition;
+        let smoothedVolume = 0;
+        const SMOOTHING_FACTOR = 0.95;
+        const NOISE_THRESHOLD = 0.15;
+
+        // Add function to send data to Lindy webhook
+        async function sendToLindy(text) {
+            const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/87662baa-61d6-4365-b736-f054f92bcc8d';
+            const secretKey = '5ab99a9411fab3fbedf07ae1217d5541b729803b147360fc1151b203f1994b3c';
+            
+            // Get stored conversation ID
+            const conversationId = localStorage.getItem('lindyConversationId');
+            const currentUrl = conversationId ? 
+                `${webhookUrl}?conversationId=${conversationId}` : 
+                webhookUrl;
+            
+            try {
+                console.log('Sending to Lindy:', text, 'Using URL:', currentUrl);
+                const response = await fetch(currentUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${secretKey}`
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        source: 'bella-website',
+                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
+                    })
+                });
+                
+                if (!response.ok) {
+                    console.error('Failed to send to Lindy:', response.statusText);
+                    const errorText = await response.text();
+                    console.error('Error details:', errorText);
+                } else {
+                    const data = await response.json();
+                    console.log('Full Lindy response:', JSON.stringify(data, null, 2));
+                    
+                    // Store the conversation ID if we get one
+                    if (data && data.data && data.data.conversationId && !conversationId) {
+                        localStorage.setItem('lindyConversationId', data.data.conversationId);
+                        console.log('Stored conversation ID:', data.data.conversationId);
+                    }
+                    
+                    // Check all possible locations for response text
+                    let responseText = null;
+                    if (data && data.text) {
+                        responseText = data.text;
+                    } else if (data && data.data && data.data.text) {
+                        responseText = data.data.text;
+                    } else if (data && data.message) {
+                        responseText = data.message;
+                    }
+                    
+                    if (responseText) {
+                        console.log('Found response text:', responseText);
+                        displayLindyResponse(responseText);
+                    } else {
+                        console.log('No response text found in:', data);
+                    }
+                }
+            } catch (error) {
+                console.error('Error sending to Lindy:', error);
+            }
+        }
+
+        // Add function to display Lindy's response
+        function displayLindyResponse(text) {
+            console.log('Displaying Lindy response:', text);
+            const transcription = document.getElementById('transcription');
+            transcription.textContent = "Lindy: " + text;
+            transcription.classList.add('active');
+            
+            // Keep the response visible for 5 seconds
+            setTimeout(() => {
+                transcription.classList.remove('active');
+            }, 5000);
+        }
+
+        function setupSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                
+                recognition.onstart = () => {
+                    status.style.opacity = 1;
+                    status.textContent = "Listening...";
+                    setTimeout(() => { status.style.opacity = 0; }, 2000);
+                };
+
+                let transcriptionTimeout;
+                recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                            // Send final transcripts to Lindy
+                            sendToLindy(transcript);
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+
+                    clearTimeout(transcriptionTimeout);
+                    if (interimTranscript || finalTranscript) {
+                        const text = interimTranscript || finalTranscript;
+                        requestAnimationFrame(() => {
+                            transcription.textContent = text;
+                            transcription.classList.add('active');
+                        });
+                        
+                        transcriptionTimeout = setTimeout(() => {
+                            transcription.classList.remove('active');
+                        }, 1500);
+                    }
+                };
+
+                recognition.onend = () => {
+                    recognition.start();
+                };
+
+                recognition.start();
+            }
+        }
+
+        async function setupAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                analyser.fftSize = 1024;
+                analyser.smoothingTimeConstant = 0.95;
+                microphone.connect(analyser);
+                
+                setupSpeechRecognition();
+                updateVisualization();
+            } catch (error) {
+                status.style.opacity = 1;
+                status.textContent = "Please allow microphone access";
+            }
+        }
+
+        function updateVisualization() {
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Focus on speech frequencies (roughly 85-255 Hz)
+            let total = 0;
+            const startBin = Math.floor(85 * analyser.fftSize / audioContext.sampleRate);
+            const endBin = Math.floor(255 * analyser.fftSize / audioContext.sampleRate);
+            
+            for (let i = startBin; i < endBin; i++) {
+                total += dataArray[i];
+            }
+            
+            const average = total / (endBin - startBin);
+            const targetVolume = Math.min(1, average / 128);
+            
+            // Smooth the volume transitions
+            smoothedVolume = SMOOTHING_FACTOR * smoothedVolume + (1 - SMOOTHING_FACTOR) * targetVolume;
+            
+            if (smoothedVolume > NOISE_THRESHOLD) {
+                clearTimeout(inactivityTimeout);
+                if (!isActive) {
+                    requestAnimationFrame(() => {
+                        circle.classList.add('active');
+                        isActive = true;
+                    });
+                }
+                
+                const baseSize = 200;
+                const maxGrowth = 40;
+                const newSize = baseSize + smoothedVolume * maxGrowth;
+                
+                requestAnimationFrame(() => {
+                    circle.style.width = `${newSize}px`;
+                    circle.style.height = `${newSize}px`;
+                    const scale = 1 + smoothedVolume * 0.1;
+                    circle.style.transform = `scale(${scale})`;
+                });
+            } else {
+                if (isActive) {
+                    clearTimeout(inactivityTimeout);
+                    inactivityTimeout = setTimeout(() => {
+                        requestAnimationFrame(() => {
+                            circle.classList.remove('active');
+                            circle.style.transform = 'scale(1)';
+                            circle.style.width = '200px';
+                            circle.style.height = '200px';
+                            isActive = false;
+                        });
+                    }, 500);
+                }
+            }
+            
+            animationFrame = requestAnimationFrame(updateVisualization);
+        }
+
+        setupAudio();
+    </script>
+</body>
+</html> 
