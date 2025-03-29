@@ -249,6 +249,54 @@
                     localStorage.setItem('lindyConversationId', data.data.conversationId);
                     console.log('Stored conversation ID:', data.data.conversationId);
                 }
+
+                // Set up webhook listener
+                const webhookEndpoint = window.location.origin + '/.netlify/functions/lindyWebhook';
+                console.log('Setting up webhook listener at:', webhookEndpoint);
+                
+                // Poll for webhook response
+                let attempts = 0;
+                const maxAttempts = 10;
+                const pollInterval = 1000; // 1 second
+
+                const pollForResponse = async () => {
+                    if (attempts >= maxAttempts) {
+                        console.log('Max polling attempts reached');
+                        displayLindyResponse("I didn't receive a response. Please try again.");
+                        return;
+                    }
+
+                    try {
+                        const webhookResponse = await fetch(webhookEndpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                text: cleanText,
+                                messageId: data.data?.messageId
+                            })
+                        });
+
+                        if (webhookResponse.ok) {
+                            const responseData = await webhookResponse.json();
+                            if (responseData.success && responseData.text) {
+                                displayLindyResponse(responseData.text);
+                                return;
+                            }
+                        }
+
+                        attempts++;
+                        setTimeout(pollForResponse, pollInterval);
+                    } catch (error) {
+                        console.error('Error polling webhook:', error);
+                        attempts++;
+                        setTimeout(pollForResponse, pollInterval);
+                    }
+                };
+
+                // Start polling
+                pollForResponse();
             } catch (error) {
                 console.error('Error sending to Bella:', error);
                 displayLindyResponse("I'm having trouble understanding. Could you try again?");

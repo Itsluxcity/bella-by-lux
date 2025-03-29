@@ -1,3 +1,6 @@
+// Store responses in memory (this will be cleared when the function is redeployed)
+const responseStore = new Map();
+
 exports.handler = async function(event, context) {
   // Enable CORS
   const headers = {
@@ -31,30 +34,55 @@ exports.handler = async function(event, context) {
     // Log the raw body for debugging
     console.log('Raw webhook body:', event.body);
 
-    // Try to parse as JSON first, if that fails treat as raw text
+    // Parse the incoming data
     let data;
-    let responseText = '';
-    
     try {
       data = JSON.parse(event.body);
       console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
-      
-      // Extract response text from JSON structure
-      if (data.response && typeof data.response === 'string') {
-        responseText = data.response;
-      } else if (data.response && data.response.text) {
-        responseText = data.response.text;
-      } else if (data.response && data.response.message) {
-        responseText = data.response.message;
-      } else if (data.text) {
-        responseText = data.text;
-      } else if (data.message) {
-        responseText = data.message;
-      }
     } catch (parseError) {
-      // If JSON parsing fails, use the raw body as the response text
       console.log('Not JSON, using raw text');
-      responseText = event.body;
+      data = { text: event.body };
+    }
+
+    // If this is a polling request (has messageId)
+    if (data.messageId) {
+      const storedResponse = responseStore.get(data.messageId);
+      if (storedResponse) {
+        // Clear the stored response after retrieving it
+        responseStore.delete(data.messageId);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            text: storedResponse
+          })
+        };
+      }
+      return {
+        statusCode: 202,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          error: 'Response not ready'
+        })
+      };
+    }
+
+    // This is a webhook callback from Lindy
+    let responseText = '';
+    
+    // Extract response text from various possible locations
+    if (data.response && typeof data.response === 'string') {
+      responseText = data.response;
+    } else if (data.response && data.response.text) {
+      responseText = data.response.text;
+    } else if (data.response && data.response.message) {
+      responseText = data.response.message;
+    } else if (data.text) {
+      responseText = data.text;
+    } else if (data.message) {
+      responseText = data.message;
     }
 
     if (!responseText) {
@@ -67,6 +95,11 @@ exports.handler = async function(event, context) {
           error: 'No response text found'
         })
       };
+    }
+
+    // Store the response if we have a messageId
+    if (data.messageId) {
+      responseStore.set(data.messageId, responseText);
     }
 
     // Send back the response
