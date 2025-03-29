@@ -161,6 +161,19 @@
         const SMOOTHING_FACTOR = 0.95;
         const NOISE_THRESHOLD = 0.15;
 
+        // Add function to display Lindy's response
+        function displayLindyResponse(text) {
+            console.log('Displaying Bella response:', text);
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = "Bella: " + text;
+            responseDiv.classList.add('active');
+            
+            // Keep the response visible for 8 seconds
+            setTimeout(() => {
+                responseDiv.classList.remove('active');
+            }, 8000);
+        }
+
         // Add function to send data to Lindy webhook
         async function sendToLindy(text) {
             const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/87662baa-61d6-4365-b736-f054f92bcc8d';
@@ -185,7 +198,7 @@
                     return;
                 }
 
-                console.log('Sending to Lindy:', cleanText, 'Using URL:', currentUrl);
+                console.log('Sending to Bella:', cleanText, 'Using URL:', currentUrl);
                 
                 const response = await fetch(currentUrl, {
                     method: 'POST',
@@ -201,12 +214,13 @@
                 });
                 
                 if (!response.ok) {
-                    console.error('Failed to send to Lindy:', response.statusText);
+                    console.error('Failed to send to Bella:', response.statusText);
                     const errorText = await response.text();
                     console.error('Error details:', errorText);
+                    displayLindyResponse("I'm having trouble connecting. Please try again in a moment.");
                 } else {
                     const data = await response.json();
-                    console.log('Full Lindy response:', JSON.stringify(data, null, 2));
+                    console.log('Full Bella response:', JSON.stringify(data, null, 2));
                     
                     // Store the conversation ID if we get one
                     if (data && data.data && data.data.conversationId && !conversationId) {
@@ -229,23 +243,13 @@
                         displayLindyResponse(responseText);
                     } else {
                         console.log('No response text found in:', data);
+                        displayLindyResponse("I heard you, but I'm not sure how to respond.");
                     }
                 }
             } catch (error) {
-                console.error('Error sending to Lindy:', error);
+                console.error('Error sending to Bella:', error);
+                displayLindyResponse("I'm having trouble understanding. Could you try again?");
             }
-        }
-
-        // Add function to display Lindy's response
-        function displayLindyResponse(text) {
-            console.log('Displaying Bella response:', text);
-            response.textContent = "Bella: " + text;
-            response.classList.add('active');
-            
-            // Keep the response visible for 8 seconds
-            setTimeout(() => {
-                response.classList.remove('active');
-            }, 8000);
         }
 
         function setupSpeechRecognition() {

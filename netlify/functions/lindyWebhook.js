@@ -27,51 +27,43 @@ exports.handler = async function(event, context) {
   try {
     // Parse the incoming webhook data
     let data;
-    
-    // First try to parse the body as JSON
     try {
       data = JSON.parse(event.body);
+      console.log('Received webhook data:', JSON.stringify(data, null, 2));
     } catch (parseError) {
-      // If JSON parsing fails, try to escape special characters
-      const escapedBody = event.body
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r')
-        .replace(/\t/g, '\\t');
-      
-      try {
-        data = JSON.parse(`{"text": "${escapedBody}"}`);
-      } catch (secondError) {
-        // If both parsing attempts fail, return the raw body as text
-        data = { text: event.body };
-      }
+      console.error('Error parsing webhook data:', parseError);
+      data = { text: event.body };
     }
 
-    console.log('Received webhook data:', JSON.stringify(data, null, 2));
+    // Extract the response text from the webhook data
+    let responseText = '';
+    if (data.text) {
+      responseText = data.text;
+    } else if (data.data && data.data.text) {
+      responseText = data.data.text;
+    } else if (data.message) {
+      responseText = data.message;
+    }
 
+    // Send back the response
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        message: 'Webhook received successfully',
-        data: {
-          text: typeof data.text === 'string' ? data.text : 'Message received',
-          processed: true
-        }
+        success: true,
+        text: responseText || "I received your message!",
+        data: data
       })
     };
   } catch (error) {
     console.error('Error processing webhook:', error);
     return {
-      statusCode: 200, // Changed to 200 to avoid Lindy retries
+      statusCode: 200,
       headers,
       body: JSON.stringify({
-        message: 'Webhook processed with warnings',
-        data: {
-          text: 'I received your message but had trouble processing it. Could you try rephrasing?',
-          error: error.message
-        }
+        success: false,
+        text: "I'm having trouble understanding. Could you try again?",
+        error: error.message
       })
     };
   }
