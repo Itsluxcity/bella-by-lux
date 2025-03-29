@@ -7,16 +7,4 @@
     [headers.values]
     Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, Authorization"
-
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/.netlify/functions/lindyWebhook"
-  to = "/.netlify/functions/lindyWebhook"
-  status = 200
-  force = true
-  headers = {Access-Control-Allow-Origin = "*"} 
+    Access-Control-Allow-Headers = "Content-Type, Authorization" 
