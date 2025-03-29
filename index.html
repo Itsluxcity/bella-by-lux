@@ -146,7 +146,10 @@
                 webhookUrl;
             
             try {
-                console.log('Sending to Lindy:', text, 'Using URL:', currentUrl);
+                // Clean and format the text
+                const cleanText = text.trim().replace(/[\r\n]+/g, ' ');
+                console.log('Sending to Lindy:', cleanText, 'Using URL:', currentUrl);
+                
                 const response = await fetch(currentUrl, {
                     method: 'POST',
                     headers: {
@@ -154,7 +157,7 @@
                         'Authorization': `Bearer ${secretKey}`
                     },
                     body: JSON.stringify({
-                        text: text,
+                        text: cleanText,
                         source: 'bella-website',
                         callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
                     })

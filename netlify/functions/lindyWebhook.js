@@ -3,7 +3,8 @@ exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
   };
 
   // Handle preflight requests
@@ -25,7 +26,15 @@ exports.handler = async function(event, context) {
 
   try {
     // Parse the incoming webhook data
-    const data = JSON.parse(event.body);
+    let data;
+    try {
+      data = JSON.parse(event.body);
+    } catch (parseError) {
+      // If JSON parsing fails, try to sanitize the input
+      const sanitizedBody = event.body.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+      data = { text: sanitizedBody };
+    }
+
     console.log('Received webhook data:', JSON.stringify(data, null, 2));
 
     // Here you can process the webhook data as needed
@@ -36,7 +45,10 @@ exports.handler = async function(event, context) {
       headers,
       body: JSON.stringify({
         message: 'Webhook received successfully',
-        data: data
+        data: {
+          text: data.text || 'Message received',
+          processed: true
+        }
       })
     };
   } catch (error) {
