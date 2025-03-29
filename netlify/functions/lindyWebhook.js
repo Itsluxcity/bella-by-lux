@@ -25,63 +25,69 @@ exports.handler = async function(event, context) {
 
   try {
     // Log raw input for debugging
-    console.log('Raw webhook input:', event.body);
+    console.log('Raw webhook body:', event.body);
 
-    // Parse the incoming data
+    // Try to parse as JSON, but don't fail if it's not JSON
     let data;
     try {
       data = JSON.parse(event.body);
+      console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
     } catch (e) {
-      console.error('Failed to parse JSON:', e);
+      // If it's not JSON, use the raw text
+      console.log('Not JSON, using raw text');
+      data = { text: event.body };
+    }
+
+    // If this is a polling request from our frontend
+    if (data.checkResponse === true && data.conversationId) {
+      const storedResponse = responseStore.get(data.conversationId);
+      if (storedResponse) {
+        // Clear the stored response after returning it
+        responseStore.delete(data.conversationId);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            text: storedResponse
+          })
+        };
+      }
       return {
-        statusCode: 400,
+        statusCode: 200,
         headers,
-        body: JSON.stringify({ error: 'Invalid JSON payload' })
+        body: JSON.stringify({
+          success: false,
+          error: 'No response available yet'
+        })
       };
     }
 
-    // Log parsed data
-    console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
-
-    // Extract response text from the data
-    let responseText = '';
-    
-    if (typeof data === 'string') {
-      responseText = data;
-    } else if (data.text) {
-      responseText = data.text;
-    } else if (data.response) {
-      if (typeof data.response === 'string') {
-        responseText = data.response;
-      } else if (data.response.text) {
-        responseText = data.response.text;
-      } else if (data.response.message) {
-        responseText = data.response.message;
+    // If this is a response from Lindy
+    if (data.text && data.text !== 'MESSAGE RECIEVED') {
+      // Store the response if we have a conversation ID
+      if (data.conversationId) {
+        responseStore.set(data.conversationId, data.text);
+        console.log('Stored response for conversation:', data.conversationId);
       }
-    } else if (data.message) {
-      responseText = data.message;
-    }
 
-    // If we found a response, return it
-    if (responseText) {
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
-          text: responseText.trim()
+          text: data.text
         })
       };
     }
 
-    // If we got here, we couldn't find a usable response
-    console.log('No response text found in:', data);
+    // If we got here, it's probably just an acknowledgment
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        success: false,
-        error: 'No response text found in payload'
+        success: true,
+        message: 'Acknowledgment received'
       })
     };
 
