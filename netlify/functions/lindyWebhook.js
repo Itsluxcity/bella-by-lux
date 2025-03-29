@@ -31,16 +31,13 @@ exports.handler = async function(event, context) {
   }
 
   try {
-    // Log the raw body for debugging
-    console.log('Raw webhook body:', event.body);
-
-    // Parse the incoming data
+    // Parse the incoming webhook data from Lindy
     let data;
     try {
       data = JSON.parse(event.body);
-      console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
-    } catch (parseError) {
-      console.error('Error parsing webhook data:', parseError);
+      console.log('Received webhook data:', JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Error parsing webhook data:', error);
       return {
         statusCode: 400,
         headers,
@@ -51,36 +48,8 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // If this is a polling request (has messageId)
-    if (data.messageId) {
-      const storedResponse = responseStore.get(data.messageId);
-      if (storedResponse) {
-        // Clear the stored response after retrieving it
-        responseStore.delete(data.messageId);
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: true,
-            text: storedResponse
-          })
-        };
-      }
-      // If no stored response yet, return 202 to indicate we're still waiting
-      return {
-        statusCode: 202,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          error: 'Response not ready'
-        })
-      };
-    }
-
-    // This must be a webhook callback from Lindy
+    // Extract the response text from various possible locations
     let responseText = '';
-    
-    // Extract response text from Lindy's webhook data
     if (data.response && typeof data.response === 'string') {
       responseText = data.response;
     } else if (data.response && data.response.text) {
@@ -94,30 +63,24 @@ exports.handler = async function(event, context) {
     }
 
     if (!responseText) {
-      console.error('No response text found in Lindy webhook:', event.body);
+      console.error('No response text found in webhook data');
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: false,
-          error: 'No response text found in webhook'
+          error: 'No response text found'
         })
       };
     }
 
-    // Store the response with the messageId from the original request
-    if (data.messageId) {
-      console.log('Storing response for messageId:', data.messageId);
-      responseStore.set(data.messageId, responseText);
-    }
-
-    // Acknowledge receipt of webhook
+    // Return the response text immediately
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        message: 'Webhook received and processed'
+        text: responseText
       })
     };
   } catch (error) {
