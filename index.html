@@ -147,7 +147,17 @@
             
             try {
                 // Clean and format the text
-                const cleanText = text.trim().replace(/[\r\n]+/g, ' ');
+                const cleanText = text.trim()
+                    .replace(/[\r\n]+/g, ' ')
+                    .replace(/[^\x20-\x7E]/g, '') // Remove non-printable characters
+                    .replace(/"/g, '\\"')          // Escape quotes
+                    .trim();
+
+                if (!cleanText) {
+                    console.log('Empty text after cleaning, skipping request');
+                    return;
+                }
+
                 console.log('Sending to Lindy:', cleanText, 'Using URL:', currentUrl);
                 
                 const response = await fetch(currentUrl, {

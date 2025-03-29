@@ -27,18 +27,28 @@ exports.handler = async function(event, context) {
   try {
     // Parse the incoming webhook data
     let data;
+    
+    // First try to parse the body as JSON
     try {
       data = JSON.parse(event.body);
     } catch (parseError) {
-      // If JSON parsing fails, try to sanitize the input
-      const sanitizedBody = event.body.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-      data = { text: sanitizedBody };
+      // If JSON parsing fails, try to escape special characters
+      const escapedBody = event.body
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
+      
+      try {
+        data = JSON.parse(`{"text": "${escapedBody}"}`);
+      } catch (secondError) {
+        // If both parsing attempts fail, return the raw body as text
+        data = { text: event.body };
+      }
     }
 
     console.log('Received webhook data:', JSON.stringify(data, null, 2));
-
-    // Here you can process the webhook data as needed
-    // For now, we'll just log it and return success
 
     return {
       statusCode: 200,
@@ -46,7 +56,7 @@ exports.handler = async function(event, context) {
       body: JSON.stringify({
         message: 'Webhook received successfully',
         data: {
-          text: data.text || 'Message received',
+          text: typeof data.text === 'string' ? data.text : 'Message received',
           processed: true
         }
       })
@@ -54,11 +64,14 @@ exports.handler = async function(event, context) {
   } catch (error) {
     console.error('Error processing webhook:', error);
     return {
-      statusCode: 400,
+      statusCode: 200, // Changed to 200 to avoid Lindy retries
       headers,
       body: JSON.stringify({
-        error: 'Invalid request data',
-        details: error.message
+        message: 'Webhook processed with warnings',
+        data: {
+          text: 'I received your message but had trouble processing it. Could you try rephrasing?',
+          error: error.message
+        }
       })
     };
   }
