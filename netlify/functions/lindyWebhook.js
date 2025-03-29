@@ -32,17 +32,40 @@ exports.handler = async function(event, context) {
       console.log('Received webhook data:', JSON.stringify(data, null, 2));
     } catch (parseError) {
       console.error('Error parsing webhook data:', parseError);
-      data = { text: event.body };
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          success: false,
+          error: 'Invalid JSON payload'
+        })
+      };
     }
 
     // Extract the response text from the webhook data
     let responseText = '';
-    if (data.text) {
+    
+    // Check for response in various possible locations
+    if (data.response && data.response.text) {
+      responseText = data.response.text;
+    } else if (data.response && data.response.message) {
+      responseText = data.response.message;
+    } else if (data.text) {
       responseText = data.text;
-    } else if (data.data && data.data.text) {
-      responseText = data.data.text;
     } else if (data.message) {
       responseText = data.message;
+    }
+
+    if (!responseText) {
+      console.error('No response text found in webhook data');
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          error: 'No response text found in webhook data'
+        })
+      };
     }
 
     // Send back the response
@@ -51,18 +74,16 @@ exports.handler = async function(event, context) {
       headers,
       body: JSON.stringify({
         success: true,
-        text: responseText || "I received your message!",
-        data: data
+        text: responseText
       })
     };
   } catch (error) {
     console.error('Error processing webhook:', error);
     return {
-      statusCode: 200,
+      statusCode: 500,
       headers,
       body: JSON.stringify({
         success: false,
-        text: "I'm having trouble understanding. Could you try again?",
         error: error.message
       })
     };

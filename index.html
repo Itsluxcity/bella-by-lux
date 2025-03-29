@@ -200,6 +200,9 @@
 
                 console.log('Sending to Bella:', cleanText, 'Using URL:', currentUrl);
                 
+                // Show temporary "thinking" message
+                displayLindyResponse("Thinking...");
+                
                 const response = await fetch(currentUrl, {
                     method: 'POST',
                     headers: {
@@ -219,31 +222,14 @@
                     console.error('Error details:', errorText);
                     displayLindyResponse("I'm having trouble connecting. Please try again in a moment.");
                 } else {
+                    // Don't display any message here - wait for the webhook callback
                     const data = await response.json();
-                    console.log('Full Bella response:', JSON.stringify(data, null, 2));
+                    console.log('Initial Bella response:', JSON.stringify(data, null, 2));
                     
                     // Store the conversation ID if we get one
                     if (data && data.data && data.data.conversationId && !conversationId) {
                         localStorage.setItem('lindyConversationId', data.data.conversationId);
                         console.log('Stored conversation ID:', data.data.conversationId);
-                    }
-                    
-                    // Check all possible locations for response text
-                    let responseText = null;
-                    if (data && data.text) {
-                        responseText = data.text;
-                    } else if (data && data.data && data.data.text) {
-                        responseText = data.data.text;
-                    } else if (data && data.message) {
-                        responseText = data.message;
-                    }
-                    
-                    if (responseText) {
-                        console.log('Found response text:', responseText);
-                        displayLindyResponse(responseText);
-                    } else {
-                        console.log('No response text found in:', data);
-                        displayLindyResponse("I heard you, but I'm not sure how to respond.");
                     }
                 }
             } catch (error) {
