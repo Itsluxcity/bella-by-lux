@@ -60,7 +60,7 @@
         }
         #transcription {
             position: fixed;
-            bottom: 80px;
+            bottom: 120px;
             left: 50%;
             transform: translateX(-50%);
             color: rgba(255,255,255,0.8);
@@ -71,10 +71,35 @@
             max-width: 600px;
             min-height: 24px;
             opacity: 0;
-            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 10px;
+            transition: opacity 0.3s ease;
+            padding: 15px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
         }
         #transcription.active {
+            opacity: 1;
+        }
+        #response {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(140, 180, 255, 0.9);
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 1px;
+            text-align: center;
+            max-width: 600px;
+            min-height: 24px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            padding: 15px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+        #response.active {
             opacity: 1;
         }
         #status {
@@ -104,6 +129,7 @@
     </div>
 
     <div id="transcription"></div>
+    <div id="response"></div>
     <div id="status"></div>
 
     <svg>
@@ -123,6 +149,7 @@
         const circle = document.getElementById('circle');
         const status = document.getElementById('status');
         const transcription = document.getElementById('transcription');
+        const response = document.getElementById('response');
         let audioContext;
         let analyser;
         let microphone;
@@ -211,15 +238,14 @@
 
         // Add function to display Lindy's response
         function displayLindyResponse(text) {
-            console.log('Displaying Lindy response:', text);
-            const transcription = document.getElementById('transcription');
-            transcription.textContent = "Lindy: " + text;
-            transcription.classList.add('active');
+            console.log('Displaying Bella response:', text);
+            response.textContent = "Bella: " + text;
+            response.classList.add('active');
             
-            // Keep the response visible for 5 seconds
+            // Keep the response visible for 8 seconds
             setTimeout(() => {
-                transcription.classList.remove('active');
-            }, 5000);
+                response.classList.remove('active');
+            }, 8000);
         }
 
         function setupSpeechRecognition() {
@@ -254,13 +280,13 @@
                     if (interimTranscript || finalTranscript) {
                         const text = interimTranscript || finalTranscript;
                         requestAnimationFrame(() => {
-                            transcription.textContent = text;
+                            transcription.textContent = "You: " + text;
                             transcription.classList.add('active');
                         });
                         
                         transcriptionTimeout = setTimeout(() => {
                             transcription.classList.remove('active');
-                        }, 1500);
+                        }, 3000);
                     }
                 };
 
