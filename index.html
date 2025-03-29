@@ -233,11 +233,8 @@
                     console.log('Stored conversation ID:', data.data.conversationId);
                 }
 
-                // Wait for Lindy to process (give it a moment)
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                // Now just wait for the response
-                displayLindyResponse("I heard you and I'm thinking about my response...");
+                // Show waiting message
+                displayLindyResponse("I heard you, I'll respond through the webhook...");
             } catch (error) {
                 console.error('Error sending to Bella:', error);
                 displayLindyResponse("I'm having trouble understanding. Could you try again?");
