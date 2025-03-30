@@ -2,83 +2,67 @@
 const responseStore = new Map();
 
 exports.handler = async function(event, context) {
+  // Log everything about the request
+  console.log('Request Method:', event.httpMethod);
+  console.log('Request Headers:', JSON.stringify(event.headers, null, 2));
+  console.log('Raw Body:', event.body);
+  console.log('Query Parameters:', event.queryStringParameters);
+
+  // Set CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive'
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
   };
 
-  // Handle preflight requests
+  // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers };
   }
 
-  // Handle GET requests for SSE
-  if (event.httpMethod === 'GET') {
-    return {
-      statusCode: 200,
-      headers,
-      body: 'data: connected\n\n'
-    };
-  }
-
-  // Only allow POST requests for webhook
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
-
   try {
-    // Log raw input for debugging
-    console.log('Raw webhook body:', event.body);
-
-    // Try to parse as JSON, but don't fail if it's not JSON
-    let data;
+    // Try to parse JSON
+    let responseData;
     try {
-      data = JSON.parse(event.body);
-      console.log('Parsed webhook data:', JSON.stringify(data, null, 2));
+      responseData = JSON.parse(event.body);
+      console.log('Parsed JSON:', JSON.stringify(responseData, null, 2));
     } catch (e) {
-      // If it's not JSON, use the raw text
-      console.log('Not JSON, using raw text');
-      data = { text: event.body };
+      // Not JSON, use raw text
+      responseData = { text: event.body };
+      console.log('Using raw text:', event.body);
     }
 
     // If this is a response from Lindy (not an acknowledgment)
-    if (data.text && data.text !== 'MESSAGE RECIEVED') {
+    if (responseData.text && responseData.text !== 'MESSAGE RECIEVED') {
+      // Send the response to the frontend
       return {
         statusCode: 200,
-        headers: { ...headers, 'Content-Type': 'text/event-stream' },
-        body: `data: ${JSON.stringify({
+        headers,
+        body: JSON.stringify({
           success: true,
-          text: data.text
-        })}\n\n`
+          text: responseData.text
+        })
       };
     }
 
     // If we got here, it's probably just an acknowledgment
     return {
       statusCode: 200,
-      headers: { ...headers, 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         success: true,
         message: 'Acknowledgment received'
       })
     };
-
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('Error:', error);
     return {
       statusCode: 500,
-      headers: { ...headers, 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         success: false,
-        error: 'Internal server error'
+        error: error.message
       })
     };
   }

@@ -179,12 +179,6 @@
             const webhookUrl = 'https://public.lindy.ai/api/v1/webhooks/lindy/87662baa-61d6-4365-b736-f054f92bcc8d';
             const secretKey = '5ab99a9411fab3fbedf07ae1217d5541b729803b147360fc1151b203f1994b3c';
             
-            // Get stored conversation ID
-            const conversationId = localStorage.getItem('lindyConversationId');
-            const currentUrl = conversationId ? 
-                `${webhookUrl}?conversationId=${conversationId}` : 
-                webhookUrl;
-            
             try {
                 // Clean and format the text
                 const cleanText = text.trim()
@@ -203,33 +197,34 @@
                 // Create a unique ID for this request
                 const requestId = Date.now().toString();
 
-                // Set up event source to listen for webhook responses
-                const evtSource = new EventSource('/.netlify/functions/lindyWebhook?requestId=' + requestId);
-                
-                evtSource.onmessage = (event) => {
-                    console.log('Received webhook response:', event.data);
+                // Set up webhook listener
+                let webhookListener = setInterval(async () => {
                     try {
-                        const data = JSON.parse(event.data);
-                        if (data.success && data.text) {
-                            displayLindyResponse(data.text);
-                            evtSource.close();
-                        }
-                    } catch (e) {
-                        // If it's not JSON, display the raw text
-                        if (event.data !== 'MESSAGE RECIEVED') {
-                            displayLindyResponse(event.data);
-                            evtSource.close();
-                        }
-                    }
-                };
+                        const webhookResponse = await fetch('/.netlify/functions/lindyWebhook', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: cleanText })
+                        });
 
-                evtSource.onerror = (error) => {
-                    console.error('EventSource error:', error);
-                    evtSource.close();
-                };
+                        if (webhookResponse.ok) {
+                            const data = await webhookResponse.json();
+                            console.log('Webhook response:', data);
+
+                            if (data.success && data.text) {
+                                // Don't display if it's just echoing our input
+                                if (data.text.toLowerCase() !== cleanText.toLowerCase()) {
+                                    displayLindyResponse(data.text);
+                                    clearInterval(webhookListener);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error checking webhook:', error);
+                    }
+                }, 1000); // Check every second
 
                 // Send to Lindy
-                const response = await fetch(currentUrl, {
+                const response = await fetch(webhookUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -238,7 +233,7 @@
                     body: JSON.stringify({
                         text: cleanText,
                         source: 'bella-website',
-                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook?requestId=' + requestId
+                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
                     })
                 });
 
@@ -247,27 +242,19 @@
                     const errorText = await response.text();
                     console.error('Error details:', errorText);
                     displayLindyResponse("I'm having trouble connecting. Please try again in a moment.");
-                    evtSource.close();
+                    clearInterval(webhookListener);
                     return;
                 }
 
                 const data = await response.json();
                 console.log('Initial Bella response:', data);
-                
-                // Store the conversation ID if we get one
-                if (data && data.data && data.data.conversationId && !conversationId) {
-                    localStorage.setItem('lindyConversationId', data.data.conversationId);
-                    console.log('Stored conversation ID:', data.data.conversationId);
-                }
 
-                // Set a timeout to close the event source if we don't get a response
+                // Set a timeout to stop polling if we don't get a response
                 setTimeout(() => {
-                    if (evtSource.readyState !== EventSource.CLOSED) {
-                        evtSource.close();
-                        const responseElement = document.getElementById('response');
-                        if (responseElement && responseElement.textContent === 'Bella: Thinking...') {
-                            displayLindyResponse("I'm sorry, I didn't receive a response in time. Please try again.");
-                        }
+                    clearInterval(webhookListener);
+                    const responseElement = document.getElementById('response');
+                    if (responseElement && responseElement.textContent === 'Bella: Thinking...') {
+                        displayLindyResponse("I'm sorry, I didn't receive a response in time. Please try again.");
                     }
                 }, 30000); // 30 second timeout
 
