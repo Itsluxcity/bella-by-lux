@@ -231,52 +231,13 @@
                     console.log('Stored conversation ID:', data.data.conversationId);
                 }
 
-                // Start polling for webhook response
-                let attempts = 0;
-                const maxAttempts = 30; // 30 seconds total
-                const pollInterval = 1000; // 1 second between attempts
-
-                const pollForResponse = async () => {
-                    if (attempts >= maxAttempts) {
+                // Set a timeout to clear the "Thinking..." message if we don't get a response
+                setTimeout(() => {
+                    const responseElement = document.getElementById('response');
+                    if (responseElement && responseElement.textContent === 'Bella: Thinking...') {
                         displayLindyResponse("I'm sorry, I didn't receive a response in time. Please try again.");
-                        return;
                     }
-
-                    try {
-                        const webhookResponse = await fetch('/.netlify/functions/lindyWebhook', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                                checkResponse: true, 
-                                conversationId: data.data.conversationId,
-                                originalText: cleanText
-                            })
-                        });
-
-                        if (webhookResponse.ok) {
-                            const responseData = await webhookResponse.json();
-                            console.log('Webhook response:', responseData);
-
-                            if (responseData.success && responseData.text) {
-                                // Don't display if it's just echoing our input
-                                if (responseData.text.toLowerCase() !== cleanText.toLowerCase()) {
-                                    displayLindyResponse(responseData.text);
-                                    return;
-                                }
-                            }
-                        }
-
-                        attempts++;
-                        setTimeout(pollForResponse, pollInterval);
-                    } catch (error) {
-                        console.error('Error polling webhook:', error);
-                        attempts++;
-                        setTimeout(pollForResponse, pollInterval);
-                    }
-                };
-
-                // Start polling
-                setTimeout(pollForResponse, pollInterval);
+                }, 30000); // 30 second timeout
 
             } catch (error) {
                 console.error('Error sending to Bella:', error);

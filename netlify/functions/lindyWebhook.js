@@ -38,39 +38,8 @@ exports.handler = async function(event, context) {
       data = { text: event.body };
     }
 
-    // If this is a polling request from our frontend
-    if (data.checkResponse === true && data.conversationId) {
-      const storedResponse = responseStore.get(data.conversationId);
-      if (storedResponse) {
-        // Clear the stored response after returning it
-        responseStore.delete(data.conversationId);
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: true,
-            text: storedResponse
-          })
-        };
-      }
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          error: 'No response available yet'
-        })
-      };
-    }
-
-    // If this is a response from Lindy
+    // If this is a response from Lindy (not an acknowledgment)
     if (data.text && data.text !== 'MESSAGE RECIEVED') {
-      // Store the response if we have a conversation ID
-      if (data.conversationId) {
-        responseStore.set(data.conversationId, data.text);
-        console.log('Stored response for conversation:', data.conversationId);
-      }
-
       return {
         statusCode: 200,
         headers,
