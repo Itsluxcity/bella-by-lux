@@ -200,6 +200,34 @@
                 console.log('Sending to Bella:', cleanText);
                 displayLindyResponse("Thinking...");
 
+                // Create a unique ID for this request
+                const requestId = Date.now().toString();
+
+                // Set up event source to listen for webhook responses
+                const evtSource = new EventSource('/.netlify/functions/lindyWebhook?requestId=' + requestId);
+                
+                evtSource.onmessage = (event) => {
+                    console.log('Received webhook response:', event.data);
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.success && data.text) {
+                            displayLindyResponse(data.text);
+                            evtSource.close();
+                        }
+                    } catch (e) {
+                        // If it's not JSON, display the raw text
+                        if (event.data !== 'MESSAGE RECIEVED') {
+                            displayLindyResponse(event.data);
+                            evtSource.close();
+                        }
+                    }
+                };
+
+                evtSource.onerror = (error) => {
+                    console.error('EventSource error:', error);
+                    evtSource.close();
+                };
+
                 // Send to Lindy
                 const response = await fetch(currentUrl, {
                     method: 'POST',
@@ -210,7 +238,7 @@
                     body: JSON.stringify({
                         text: cleanText,
                         source: 'bella-website',
-                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook'
+                        callbackUrl: window.location.origin + '/.netlify/functions/lindyWebhook?requestId=' + requestId
                     })
                 });
 
@@ -219,6 +247,7 @@
                     const errorText = await response.text();
                     console.error('Error details:', errorText);
                     displayLindyResponse("I'm having trouble connecting. Please try again in a moment.");
+                    evtSource.close();
                     return;
                 }
 
@@ -231,11 +260,14 @@
                     console.log('Stored conversation ID:', data.data.conversationId);
                 }
 
-                // Set a timeout to clear the "Thinking..." message if we don't get a response
+                // Set a timeout to close the event source if we don't get a response
                 setTimeout(() => {
-                    const responseElement = document.getElementById('response');
-                    if (responseElement && responseElement.textContent === 'Bella: Thinking...') {
-                        displayLindyResponse("I'm sorry, I didn't receive a response in time. Please try again.");
+                    if (evtSource.readyState !== EventSource.CLOSED) {
+                        evtSource.close();
+                        const responseElement = document.getElementById('response');
+                        if (responseElement && responseElement.textContent === 'Bella: Thinking...') {
+                            displayLindyResponse("I'm sorry, I didn't receive a response in time. Please try again.");
+                        }
                     }
                 }, 30000); // 30 second timeout
 

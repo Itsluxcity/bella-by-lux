@@ -5,8 +5,10 @@ exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
+    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
   };
 
   // Handle preflight requests
@@ -14,11 +16,20 @@ exports.handler = async function(event, context) {
     return { statusCode: 204, headers };
   }
 
-  // Only allow POST requests
+  // Handle GET requests for SSE
+  if (event.httpMethod === 'GET') {
+    return {
+      statusCode: 200,
+      headers,
+      body: 'data: connected\n\n'
+    };
+  }
+
+  // Only allow POST requests for webhook
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers,
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
@@ -42,18 +53,18 @@ exports.handler = async function(event, context) {
     if (data.text && data.text !== 'MESSAGE RECIEVED') {
       return {
         statusCode: 200,
-        headers,
-        body: JSON.stringify({
+        headers: { ...headers, 'Content-Type': 'text/event-stream' },
+        body: `data: ${JSON.stringify({
           success: true,
           text: data.text
-        })
+        })}\n\n`
       };
     }
 
     // If we got here, it's probably just an acknowledgment
     return {
       statusCode: 200,
-      headers,
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
         message: 'Acknowledgment received'
@@ -64,7 +75,7 @@ exports.handler = async function(event, context) {
     console.error('Webhook error:', error);
     return {
       statusCode: 500,
-      headers,
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: false,
         error: 'Internal server error'
